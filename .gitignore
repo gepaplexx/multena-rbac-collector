@@ -1,2 +1,5 @@
 vendor
 ./vendor
+users.yaml
+groups.yaml
+multena-rbac-collector
