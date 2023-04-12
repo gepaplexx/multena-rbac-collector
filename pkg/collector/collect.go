@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"fmt"
@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+func Collect(subjects []string, namespaces []string, resources []string, verbs []string) (map[string][]string, error) {
+	fmt.Println("Collecting all namespaces, users and groups ...")
+
+	return nil, nil
+}
 func collectAll() (map[string][]string, map[string][]string, error) {
 	bar := progressbar.NewOptions(3,
 		progressbar.OptionEnableColorCodes(true),
