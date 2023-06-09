@@ -57,7 +57,3 @@ We welcome contributions! Please open an issue if you have any questions or sugg
 ## License
 
 This project is licensed under the terms of the MIT license.
-
-```
-
-Please replace the placeholder `https://github.com/username/multena-rbac-collector.git` with the actual URL of your GitHub repository.
