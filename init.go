@@ -30,16 +30,19 @@ func init() {
 	err := error(nil)
 	Config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-
+		fmt.Println(err)
+		return
 	}
 
 	clientset, err = kubernetes.NewForConfig(Config)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 
 	userClientset, err = versioned.NewForConfig(Config)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 }

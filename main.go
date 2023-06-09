@@ -16,7 +16,7 @@ import (
 // it prints the error and terminates the program. If the function call succeeds, it then calls the mapsToYaml function
 // to save the collected data to a YAML file.
 func main() {
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
