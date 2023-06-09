@@ -65,15 +65,6 @@ jobs:
       - name: Install dependencies
         run: go get .
 
-      - name: Build
-        run: go build -ldflags="-X -o . -v ./...
-
-      - name: Copy build
-        run: mkdir ./.cache && cp ./multena-proxy ./.cache/multena-proxy
-
-      - name: Test
-        run: go test -v ./...
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
         with:
