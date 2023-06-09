@@ -29,6 +29,7 @@ graph TB
 
 - OpenShift cluster
 - Configured `kubeconfig` file for accessing the cluster
+- Cluster admin privileges for the user that runs the program
 
 ## Installation
 
