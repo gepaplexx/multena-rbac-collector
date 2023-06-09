@@ -10,11 +10,14 @@ import (
 	"path/filepath"
 )
 
+// Declaring global variables for Kubernetes Clientset and UserClientset from OpenShift.
 var (
 	clientset     *kubernetes.Clientset
 	userClientset *versioned.Clientset
 )
 
+// init is a special function in Go that gets called upon the package initialization.
+// This function handles the initialization and configuration of the Kubernetes and OpenShift clientsets.
 func init() {
 	var kubeconfig *string
 	if home := homedir.HomeDir(); home != "" {
@@ -27,16 +30,19 @@ func init() {
 	err := error(nil)
 	Config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-
+		fmt.Println(err)
+		return
 	}
 
 	clientset, err = kubernetes.NewForConfig(Config)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 
 	userClientset, err = versioned.NewForConfig(Config)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 }

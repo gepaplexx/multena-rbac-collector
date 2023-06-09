@@ -1,5 +1,4 @@
 vendor
 ./vendor
-users.yaml
-groups.yaml
+labels.yaml
 multena-rbac-collector

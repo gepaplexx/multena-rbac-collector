@@ -9,6 +9,16 @@ import (
 	"strings"
 )
 
+var (
+	userAllowedNamespaces  map[string][]string
+	groupAllowedNamespaces map[string][]string
+)
+
+// collectAll performs a series of collection tasks to gather information on namespaces, groups, and users from the
+// Kubernetes cluster. It uses progress bar to provide an interactive console output during these operations. For each
+// user and group, it checks the access to resources in namespaces. It returns two maps, one for users
+// and one for groups, where each map key is a username or group name and the value is a list of namespace names where
+// the user or group has access. If an error occurs during these operations, it also returns an error.
 func collectAll() (map[string][]string, map[string][]string, error) {
 	bar := progressbar.NewOptions(3,
 		progressbar.OptionEnableColorCodes(true),
@@ -82,7 +92,8 @@ func collectAll() (map[string][]string, map[string][]string, error) {
 			BarStart:      "[",
 			BarEnd:        "]",
 		}))
-	userAllowedNamespaces := make(map[string][]string)
+
+	userAllowedNamespaces = make(map[string][]string, len(users))
 	for _, user := range users {
 		bar.Describe(fmt.Sprintf("[cyan][2/3][reset] Checking access for user %s  ...", user))
 		for _, ns := range namespaces {
@@ -114,7 +125,8 @@ func collectAll() (map[string][]string, map[string][]string, error) {
 			BarStart:      "[",
 			BarEnd:        "]",
 		}))
-	groupAllowedNamespaces := make(map[string][]string)
+
+	groupAllowedNamespaces = make(map[string][]string, len(groups))
 	for _, group := range groups {
 		bar.Describe(fmt.Sprintf("[cyan][2/3][reset] Checking access for group %s ...", group))
 		for _, ns := range namespaces {
@@ -135,6 +147,10 @@ func collectAll() (map[string][]string, map[string][]string, error) {
 	return userAllowedNamespaces, groupAllowedNamespaces, nil
 }
 
+// checkAccessForUserOrGroup checks whether a given user or group has the specified access (verb) to a certain resource
+// in a specific namespace. It achieves this by creating and submitting a SubjectAccessReview to Kubernetes'
+// authorization API. The function returns true if the access is allowed, false otherwise, and an error if the check
+// operation itself fails.
 func checkAccessForUserOrGroup(userOrGroup string, namespace string, verb string, resource string) (bool, error) {
 	// Create a new SubjectAccessReview
 	sar := &v1.SubjectAccessReview{
