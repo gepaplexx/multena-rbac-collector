@@ -28,6 +28,10 @@ jobs:
         run: go vet ./...
 
   scan-code:
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
