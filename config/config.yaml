@@ -1,0 +1,6 @@
+# Time in minutes between two reconciliation loops
+reconcile_loop_interval: 5
+log_level: info
+
+namespace: gp-grafana
+config_map_name: gp-multena-labels
