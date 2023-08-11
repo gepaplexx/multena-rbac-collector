@@ -63,9 +63,10 @@ func NewKubeApiCollector(c config.Configuration) (*KubeApiCollector, error) {
 
 func buildKubeconfig(c config.Configuration) *rest.Config {
 	kubeconfig, err := clientcmd.BuildConfigFromFlags("", c.Kubeconfig)
-	if err != nil {
-		log.Infof("Error reading kubeconfig from %s, trying in-cluster config", c.Kubeconfig)
+	if err == nil {
+		return kubeconfig
 	}
+	log.Info("Couldn't build kubeconfig from parameters, trying in-cluster config")
 	kubeconfig, err = rest.InClusterConfig()
 	if err != nil {
 		log.Errorf("error creating in-cluster config: %v", err)
@@ -122,7 +123,7 @@ func (c *KubeApiCollector) collectFromApi(subjects []string, namespaces []string
 		for _, namespace := range ns {
 			allowed, err := c.checkAccess(s, namespace)
 			if err != nil {
-				// Handle error according to your context
+				log.Errorf("error while checking access: %v", err)
 				return
 			}
 			if allowed {

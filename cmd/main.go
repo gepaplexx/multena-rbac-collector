@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
+	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+	ginprometheus "github.com/zsais/go-gin-prometheus"
+	"net/http"
 	"os"
 	"os/signal"
 	"rbac-collector/collectors"
 	"rbac-collector/config"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -16,25 +19,27 @@ func main() {
 	configureLogger(conf)
 	log.Infof("Starting RBAC collector with config: %+v", conf)
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		log.Info("Received SIGTERM, exiting gracefully...")
-		os.Exit(0)
-	}()
+	setupGracefulShutdown()
 
+	go runMonitoringEndpoints(conf)
+	runRbacCollector(conf)
+}
+
+func runMonitoringEndpoints(conf config.Configuration) {
+	engine := setupGinEngine()
+	setEngineRoutes(engine)
+	if err := engine.Run(fmt.Sprintf(":%d", conf.Port)); err != nil {
+		log.Fatalf("error running application: %v", err)
+	}
+}
+
+func runRbacCollector(conf config.Configuration) {
 	for {
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go collectClusterPermissions(conf, wg)
-		wg.Wait()
-
+		collectClusterPermissions(conf)
 		log.Infof("Sleeping for %d minutes", conf.ReconcileLoopInterval)
 		time.Sleep(time.Duration(conf.ReconcileLoopInterval) * time.Minute)
 		log.Infof("Waking up...")
 	}
-
 }
 
 func configureLogger(conf config.Configuration) {
@@ -47,19 +52,51 @@ func configureLogger(conf config.Configuration) {
 		PrettyPrint:       false,
 	})
 	log.SetOutput(os.Stdout)
-	lvl, err := log.ParseLevel(conf.LogLevel)
-	if err != nil {
-		lvl = log.InfoLevel
-		log.Info("Log level not set, defaulting to info")
-	}
-	log.SetLevel(lvl)
+	setLogLevel(conf.LogLevel)
 }
 
-func collectClusterPermissions(conf config.Configuration, wg *sync.WaitGroup) {
-	defer wg.Done()
+func collectClusterPermissions(conf config.Configuration) {
 	apiCollector, err := collectors.NewKubeApiCollector(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
 	apiCollector.Collect()
+}
+
+func setupGracefulShutdown() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		log.Info("Received SIGTERM, exiting gracefully...")
+		os.Exit(0)
+	}()
+}
+
+func setupGinEngine() *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+	engine := gin.New()
+	engine.Use(gin.Recovery(), gin.LoggerWithConfig(gin.LoggerConfig{
+		SkipPaths: []string{"/healthz", "/readyz", "/metrics", "/favicon.ico"},
+	}))
+	ginprometheus.NewPrometheus("gin").Use(engine)
+	return engine
+}
+
+func setEngineRoutes(engine *gin.Engine) {
+	engine.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, "OK")
+	})
+	engine.GET("/readyz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, "OK")
+	})
+}
+
+func setLogLevel(logLevel string) {
+	level, err := log.ParseLevel(logLevel)
+	if err != nil {
+		level = log.InfoLevel
+		log.Info("Log level not set, defaulting to info")
+	}
+	log.SetLevel(level)
 }

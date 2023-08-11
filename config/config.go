@@ -14,6 +14,7 @@ type Configuration struct {
 	LogLevel              string
 	Namespace             string
 	ConfigMapName         string
+	Port                  int
 }
 
 func ReadConfig() Configuration {
@@ -33,6 +34,7 @@ func ReadConfig() Configuration {
 		LogLevel:              viper.GetString("log_level"),
 		Namespace:             viper.GetString("namespace"),
 		ConfigMapName:         viper.GetString("config_map_name"),
+		Port:                  viper.GetInt("port"),
 	}
 	if conf.Kubeconfig == "" {
 		conf.Kubeconfig = defaultKubeconfig()
