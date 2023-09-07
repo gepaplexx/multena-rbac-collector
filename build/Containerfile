@@ -1,0 +1,4 @@
+FROM scratch
+COPY multena-rbac-collector /usr/local/bin/multena-rbac-collector
+USER nonroot:nonroot
+ENTRYPOINT ["multena-rbac-collector"]
