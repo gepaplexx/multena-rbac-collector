@@ -2,20 +2,21 @@ name: Publish new release
 
 on:
   push:
+    branches: [ main ]
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-
-permissions:
-  contents: write
+      - '*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  golangci:
+  lint:
     name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
+          go-version: '1.21'
           cache: true
       - uses: actions/checkout@v3
       - name: golangci-lint
@@ -27,10 +28,6 @@ jobs:
         run: go vet ./...
 
   scan-code:
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -56,31 +53,129 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
-      - name: Autotag
-        uses: phish108/autotag-action@v1.1.64
+      - uses: actions/cache@v3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          with-v: "true"
-        continue-on-error: true
-
+          path: ./.cache  # Note that this path is not influenced by working-directory set in defaults, for example
+          key: multena-rbac-collector-${{ github.run_id }}
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '>=1.20.0'
+          go-version: '1.21'
           cache: true
-
       - name: Install dependencies
         run: go get .
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v4
+      - name: Build
+        run: CGO_ENABLED=0 GOOS=linux go build -ldflags="-X github.com/gepaplexx/multena-rbac-collector/cmd.Commit=$(git rev-parse HEAD)" -o . -v ./...
+
+      - name: Change permissions
+        run: |
+          sudo chgrp -R 0 multena-rbac-collector
+          sudo chmod -R g=u multena-rbac-collector
+
+
+      - name: Copy build
+        run: mkdir ./.cache && cp ./multena-rbac-collector ./.cache/multena-rbac-collector
+
+      - name: Test
+        run: go test -v ./...
+
+  push:
+    needs: [ build-and-test, scan-code, lint ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v3
         with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
+          path: ./.cache  # Note that this path is not influenced by working-directory set in defaults, for example
+          key: multena-rbac-collector-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: move from cache
+        run: mv ./.cache/multena-rbac-collector ./multena-rbac-collector
+
+      - name: Set image name
+        run: echo "IMAGE_ID=$(echo ${{ github.repository }} | tr '[A-Z]' '[a-z]')" >> $GITHUB_ENV
+
+      - name: Get tag version
+        id: tag_version
+        uses: anothrNick/github-tag-action@1.67.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DRY_RUN: true
+          DEFAULT_BUMP: patch
+          VERBOSE: true
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ghcr.io/${{ env.IMAGE_ID }}
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=raw,value=${{ github.head_ref }}-${{ steps.tag_version.outputs.new_tag }}, enable=${{ github.head_ref != github.event.repository.default_branch }}
+            type=raw,value=${{ github.head_ref }}-${{ steps.tag_version.outputs.new_tag }}-${{github.sha}}, enable=${{ github.head_ref != github.event.repository.default_branch }}
+            type=raw,value=${{github.sha}}
+            type=semver,pattern={{version}},value=${{ steps.tag_version.outputs.new_tag }},enable={{is_default_branch}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Buildah Action
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.meta.outputs.tags }}
+          containerfiles: |
+            ./build/Containerfile
+
+      - name: Log in to the GitHub Container registry
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: push image to trivy
+        run: |
+          buildah push ${{ steps.build-image.outputs.image-with-tag }} oci:./multena-rbac-collector-oci
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: 'multena-rbac-collector-oci'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH, MEDIUM, LOW'
+          exit-code: '1'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'container'
+
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
+
+      - name: Push to GitHub Container Repository
+        id: push-to-ghcr
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
+          registry: ${{ env.REGISTRY }}
+
+
+      - name: Get tag version
+        if: ${{ github.event_name != 'pull_request' }}
+        id: tag_version_final
+        uses: anothrNick/github-tag-action@1.67.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DEFAULT_BUMP: patch

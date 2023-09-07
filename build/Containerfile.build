@@ -1,0 +1,12 @@
+FROM golang:1.21-alpine as BUILD
+WORKDIR /app/
+COPY go.mod go.sum ./
+RUN go mod verify
+COPY . .
+RUN CGO_ENABLED=0 go build
+RUN chmod +x /app/multena-rbac-collector
+
+FROM scratch
+COPY --from=BUILD /app/multena-rbac-collector /usr/local/bin/multena-rbac-collector
+USER nonroot:nonroot
+ENTRYPOINT ["multena-rbac-collector"]
