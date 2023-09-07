@@ -5,51 +5,141 @@
 [![Release](https://img.shields.io/github/v/release/gepaplexx/multena-rbac-collector)](https://github.com/gepaplexx/multena-rbac-collector/releases/latest)
 ![License](https://img.shields.io/github/license/gepaplexx/multena-rbac-collector)
 
-The `multena-rbac-collector` is a Go program that collects the Role-Based Access Control (RBAC) data from an OpenShift
-cluster, specifically users and groups with their respective access to namespaces.
-
-```mermaid
-graph TB
-  A[Start] --> B[Collects Users, Groups, and Namespaces]
-  B --> C{Checks Access}
-  C -- Yes --> D[Records Access Rights]
-  D --> E{All Entities Checked?}
-  E -- Yes --> F[Write to YAML]
-  E -- No --> C
-  F --> G[End]
-```
-
-## Features
-
-- Collects the list of all users, groups, and namespaces from an OpenShift cluster
-- Checks access for each user and group to each namespace
-- Outputs the collected data into a YAML file
-
-## Prerequisites
-
-- OpenShift cluster
-- Configured `kubeconfig` file for accessing the cluster
-- Cluster admin privileges for the user that runs the program
+`multena-rbac-collector` is a Go program designed to retrieve all cluster/-roles, role bindings, and cluster role bindings from a Kubernetes cluster and process them for integration with `multena-proxy`.
+This enables `multena-proxy` to make informed authorization decisions based on the fetched RBAC data.
 
 ## Installation
 
-Clone the repository and build using Go:
-
 ```bash
-git clone https://github.com/gepaplexx/multena-rbac-collector.git
-cd multena-rbac-collector
-go build
+go get github.com/gepaplexx/multena-rbac-collector
 ```
+
+## Key Features
+- **Two Modes**:
+    - **Run**: One-time collection of RBAC data.
+    - **Serve**: Continuous collection of RBAC data, leveraging Kubernetes watch API.
+- **ConfigMap Storage**: Use the `--cmName` and `--cmNamespace` flags to specify a ConfigMap in the cluster to store the RBAC data.
+- **Local Output**: In the `run` mode, the YAML is also outputted as a local file.
 
 ## Usage
+```
+multena-rbac-collector [command]
 
-Simply run the compiled binary:
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  run         Collects RBAC permissions and stores them in a ConfigMap
+  serve       Starts continuous RBAC collection
 
-```bash
-./multena-rbac-collector
+Flags:
+      --cmName string        in-cluster name of the ConfigMap to store the RBAC data
+      --cmNamespace string   cluster namespace of the ConfigMap to store the RBAC data
+      --config string        config file (default is $HOME/.multena-rbac-collector.yaml)
+  -h, --help                 help for multena-rbac-collector
+      --kubeconfig string    path to the kubeconfig file (default is $HOME/.kube/config for local development)
+  -t, --toggle               Help message for toggle
 ```
 
-This will create a `labels.yaml` file with the collected RBAC data.
+## Serve mode
+
+```mermaid
+graph TD
+
+    %% Definitions
+    Serve["Serve()"]
+    Watch["Watch()"]
+    watchResources["watchResources(resourceType)"]
+    Signal[Signal]
+
+    %% Serve function logic
+    Serve --> |go| Watch
+    Serve --> |HTTP invoke| Signal
+
+    %% Watch function logic
+    Watch --> |go| watchResources
+    Watch --> UpdateConfigmapLoop
+
+    %% Watch Resources Logic
+    subgraph WatchResourceLoop["Watch Resources Loop"]
+        watchResources --> |List| ListResources["List Resource"]
+        ListResources --> WatchEvent[Watch Resources & Handle Events]
+        WatchEvent --> AddResource["Add Resource"]
+        WatchEvent --> ModifyResource["Modify Resource"]
+        WatchEvent --> DeleteResource["Delete Resource"]
+    end
+
+    %% Connecting Watch Events to Signal
+    AddResource --> Signal
+    ModifyResource --> Signal
+    DeleteResource --> Signal
+
+    %% Processing Signal Logic
+    subgraph UpdateConfigmapLoop["Update Configmap Loop"]
+        ProcessSignal["Process Signal"]
+        ProcessSignal --> DrainSignal["Drain Signal"]
+        ProcessSignal --> CheckEquality["Check Maps Equality"]
+        CheckEquality --> WriteConfigmap["Write Configmap"]
+    end
+
+    Signal --> ProcessSignal
+```
+
+# Permissions for `multena-rbac-collector`
+
+To run the `multena-rbac-collector`, you need to grant it the following permissions in your Kubernetes cluster:
+
+## RBAC Authorization
+
+- **RoleBindings**:
+  - **API Group**: `rbac.authorization.k8s.io`
+  - **Resources**: `rolebindings`
+  - **Verbs**: `get`, `list`, `watch`
+
+- **ClusterRoleBindings**:
+  - **API Group**: `rbac.authorization.k8s.io`
+  - **Resources**: `clusterrolebindings`
+  - **Verbs**: `get`, `list`, `watch`
+
+- **Roles**:
+  - **API Group**: `rbac.authorization.k8s.io`
+  - **Resources**: `roles`
+  - **Verbs**: `get`, `list`, `watch`
+
+- **ClusterRoles**:
+  - **API Group**: `rbac.authorization.k8s.io`
+  - **Resources**: `clusterroles`
+  - **Verbs**: `get`, `list`, `watch`
+
+## Core Resources
+
+- **ConfigMaps**:
+  - **API Group**: `""`
+  - **Resources**: `configmaps`
+  - **Verbs**: `get`, `create`, `update`
+
+Please ensure that these permissions are correctly set before deploying the `multena-rbac-collector` to your Kubernetes environment.
+
+You can find a sample `clusterrole` binding for these permissions at [this link](https://github.com/gepaplexx/gp-helm-chart-development/tree/main/infra/gp-multena/templates/rbac-collector/rbac.yaml).
+
+## Deploying via Helm chart
+
+the `multena-rbac-collector` can be deployed via the `gp-multena` Helm chart.
+Desciption how to deploy Multena can be found [here](https://github.com/gepaplexx/multena-proxy?tab=readme-ov-file#deploy-multena).
+
+To deploy the `rbac-collector` using the `gp-multena` Helm chart, ensure you set the following values:
+
+```yaml
+rbac-collector:
+  enabled: true 
+```
+
+the helm chart can be found [here](https://github.com/gepaplexx/gp-helm-chart-development/tree/main/infra/gp-multena).
+
+## Implementation Details
+
+The package `server` provides the functionalities of serving endpoints `/healthz` for checking health and `/invoke` to manually trigger the RBAC data collection.
+
+For continuously watching the RBAC changes in the Kubernetes cluster, the program leverages Kubernetes watch API. Upon detection of any changes, the RBAC data is processed, compared, and stored in the specified ConfigMap.
 
 ## Contributing
 
