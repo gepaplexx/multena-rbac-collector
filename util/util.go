@@ -24,13 +24,13 @@ func WriteConfigmap(clientset *kubernetes.Clientset, permission map[string]map[s
 	_, err = clientset.CoreV1().ConfigMaps(c.CMNamespace).Patch(context.Background(), c.CMName, types.MergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return createConfigMap(clientset, err, c, permissions)
+			return createConfigMap(clientset, c, permissions)
 		}
 	}
 	return nil
 }
 
-func createConfigMap(clientset *kubernetes.Clientset, err error, c Config, permissions []byte) error {
+func createConfigMap(clientset *kubernetes.Clientset, c Config, permissions []byte) error {
 	cm := v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.CMName,
@@ -42,12 +42,11 @@ func createConfigMap(clientset *kubernetes.Clientset, err error, c Config, permi
 		},
 		BinaryData: nil,
 	}
-	_, err = clientset.CoreV1().ConfigMaps(c.CMNamespace).Create(context.Background(), &cm, metav1.CreateOptions{})
+	_, err := clientset.CoreV1().ConfigMaps(c.CMNamespace).Create(context.Background(), &cm, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
 	return nil
-	return err
 }
 
 func MapsEqual(m1, m2 map[string]map[string]bool) bool {
