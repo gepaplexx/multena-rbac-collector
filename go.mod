@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/rs/zerolog v1.30.0
 	github.com/schollz/progressbar/v3 v3.13.1
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.8.4
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.28.1
@@ -41,7 +41,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/sys v0.12.0 // indirect
